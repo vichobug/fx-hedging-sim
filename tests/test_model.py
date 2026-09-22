@@ -79,3 +79,12 @@ def test_engines_are_centered_and_preserve_correlation(engine):
     assert ratio.shape == (40_000, 2)
     assert np.allclose(ratio.mean(axis=0), 1.0, atol=0.003)       # no drift: E[S_T/S_0] = 1
     assert np.corrcoef(np.log(ratio).T)[0, 1] == pytest.approx(0.6, abs=0.05)
+
+
+def test_rate_history_has_no_lookahead():
+    from fx_data import load_rate_history
+    # The Jan 2024 EUR monthly average must not be visible until Feb 1, 2024
+    dates = pd.DatetimeIndex(["2024-01-15", "2024-01-31", "2024-02-01"])
+    hist = load_rate_history(dates)
+    assert hist.loc["2024-01-15", "EUR"] == hist.loc["2024-01-31", "EUR"]   # still Dec 2023's value
+    assert hist.loc["2024-02-01", "EUR"] != hist.loc["2024-01-31", "EUR"]   # Jan value now known

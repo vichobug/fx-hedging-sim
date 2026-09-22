@@ -66,6 +66,22 @@ def load_rates() -> pd.DataFrame:
     return pd.DataFrame(rows).set_index("currency")
 
 
+def load_rate_history(dates: pd.DatetimeIndex) -> pd.DataFrame:
+    """Rates (decimal) as they were KNOWN on each date -- no look-ahead.
+
+    The OECD series are monthly averages stamped on the 1st of the month, so
+    a month's value isn't known until that month is over: each is shifted
+    to the 1st of the following month before forward-filling onto `dates`.
+    """
+    cols = {}
+    for ccy, series_id in RATE_SERIES.items():
+        s = _read_fred(series_id) / 100.0
+        if ccy != "USD":
+            s.index = s.index + pd.offsets.MonthBegin(1)
+        cols[ccy] = s.reindex(s.index.union(dates)).ffill().reindex(dates)
+    return pd.DataFrame(cols, index=dates)
+
+
 if __name__ == "__main__":
     spot = load_spot_history()
     print(f"Spot history: {spot.index.min().date()} to {spot.index.max().date()}, {len(spot)} days")

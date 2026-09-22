@@ -19,8 +19,10 @@ today's spot rates. How much should it hedge, and with what?
 - `src/strategies.py` -- USD received under any forward / option / open split
 - `src/risk.py` -- VaR and CVaR (expected shortfall)
 - `src/scenario.py` -- shared entry point tying market, simulation and strategies together
+- `src/backtest.py` -- historical backtest using only information available on each start date
 - `notebooks/run_simulation.py` -- main strategy comparison + charts
 - `notebooks/sensitivity.py` -- hedge-ratio frontier, strike choice, diversification, model risk
+- `notebooks/backtest.py` -- backtest results, simulation vs. history, worst historical windows
 - `tests/test_model.py` -- checks against closed-form results (put-call parity, IRP, etc.)
 
 ## Run it
@@ -30,6 +32,7 @@ pip install -r requirements.txt
 python scripts/fetch_fx_data.py      # refresh data (a snapshot is already committed)
 python notebooks/run_simulation.py
 python notebooks/sensitivity.py
+python notebooks/backtest.py
 pytest
 ```
 
@@ -83,6 +86,41 @@ What the numbers say:
   same CVaR99 ($18.2M vs. $18.6M). Summing 126 daily returns averages
   away single-day extremes; fat tails would matter much more for a short
   horizon.
+
+## Historical backtest
+
+The simulation says what the distribution of outcomes *should* look like.
+The backtest checks it against what actually happened: the same hedge put on
+at the start of every month from Jan 2010 to Mar 2026 (195 windows), each
+held six months. Everything is built point-in-time -- forwards from the
+rates known on the start date (monthly OECD averages only become visible
+once their month is over), option premiums at the trailing 1-year vol.
+
+![Backtest timeline](figures/backtest_timeline.png)
+
+P&L vs. budget, % of budget:
+
+| Strategy | Mean | Std | CVaR 95% | Worst window |
+|---|---:|---:|---:|---:|
+| Unhedged | −0.53% | 4.21% | 9.76% | −12.2% (Sep 2014) |
+| 100% forwards | −0.31% | 0.48% | 1.07% | −1.1% (Jul 2011) |
+| 100% ATM-forward puts | −0.37% | 2.14% | 3.09% | −3.4% (Aug 2016) |
+| Layered 50/30/20 | −0.38% | 1.72% | 3.35% | −3.9% (Sep 2014) |
+
+- **The simulation holds up.** Simulated vs. historical std is 4.08% vs.
+  4.21% unhedged, 2.19% vs. 2.14% for puts, 1.67% vs. 1.72% layered.
+  Historical CVaR runs ~1.5 points worse than simulated for unhedged --
+  history's worst windows (the 2014 dollar rally, 2022 Fed hikes) were
+  sustained trends, which ~1-month bootstrap blocks only partly capture.
+- **Hedges earn their keep in the crises.** The 2014-15 dollar rally cost
+  the unhedged book 12.2% of budget; forwards held it to −0.7%, puts to
+  −2.2%. In the 2022 rally: −11.2% unhedged vs. −0.5% and −2.0%.
+- **Forward cost depends on the rate regime.** With US rates near zero
+  (2010-2019), selling higher-yielding currencies forward cost up to ~1%
+  per six months. After the 2022 Fed hikes USD rates exceeded most of
+  these, and the same hedge *earned* forward points.
+- **Caveat**: consecutive windows overlap by five months, so the 195
+  windows carry only ~32 independent observations.
 
 ## Limitations
 
